@@ -50,15 +50,21 @@ public class ChatModelConfig {
         // requestFactory 负责创建 RestClient 的 HTTP 请求，使用 JDK HttpClient 进行连接
         ClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory();
 
+        // 规范化 baseUrl：去除末尾的 /v1 或 /v1/
+        String resolvedBaseUrl = baseUrl == null ? null : baseUrl.replaceAll("/v1/?$", "");
+
+        // 打印关键配置，便于定位 404 问题
+        System.out.println("[ChatModelConfig] creating chatModel with baseUrl=" + resolvedBaseUrl + " model=" + model);
+
         // 构建 RestClient，设置 baseUrl 和 Authorization 头
         RestClient.Builder restClientBuilder = RestClient.builder()
-                .baseUrl(baseUrl)
+                .baseUrl(resolvedBaseUrl)
                 .defaultHeader("Authorization", "Bearer " + apiKey)
                 .requestFactory(requestFactory);
 
         // 构建 OpenAiApi，注入 RestClient
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl(baseUrl)
+                .baseUrl(resolvedBaseUrl)
                 .apiKey(apiKey)
                 .restClientBuilder(restClientBuilder)
                 .build();

@@ -61,10 +61,10 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private static final ExecutorService SECKILL_ORDER_EXECUTOR = Executors.newSingleThreadExecutor();
 
     // 暂时不启用秒杀订单异步处理线程，避免在当前阶段继续消费 Redis Stream 中的订单消息
-    @PostConstruct
-    private void init() {
-        SECKILL_ORDER_EXECUTOR.submit(new VoucherOrderHandler());
-    }
+    // @PostConstruct
+    // private void init() {
+    //     SECKILL_ORDER_EXECUTOR.submit(new VoucherOrderHandler());
+    // }
 
     private class VoucherOrderHandler implements Runnable {
 

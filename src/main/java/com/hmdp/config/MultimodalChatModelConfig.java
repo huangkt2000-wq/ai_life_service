@@ -48,13 +48,19 @@ public class MultimodalChatModelConfig {
 
         ClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory();
 
+        // 规范化 baseUrl：去除末尾的 /v1 或 /v1/
+        String resolvedBaseUrl = baseUrl == null ? null : baseUrl.replaceAll("/v1/?$", "");
+
+        // 打印关键配置，便于定位 404 问题
+        System.out.println("[MultimodalChatModelConfig] creating multimodalChatModel with baseUrl=" + resolvedBaseUrl + " model=" + model);
+
         RestClient.Builder restClientBuilder = RestClient.builder()
-                .baseUrl(baseUrl)
+                .baseUrl(resolvedBaseUrl)
                 .defaultHeader("Authorization", "Bearer " + apiKey)
                 .requestFactory(requestFactory);
 
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl(baseUrl)
+                .baseUrl(resolvedBaseUrl)
                 .apiKey(apiKey)
                 .restClientBuilder(restClientBuilder)
                 .build();
