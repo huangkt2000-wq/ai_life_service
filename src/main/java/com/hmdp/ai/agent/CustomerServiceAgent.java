@@ -5,14 +5,17 @@ import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.hmdp.ai.dto.AgentRequest;
 import com.hmdp.ai.dto.AgentResponse;
-import com.hmdp.ai.memory.ChatMemory;
 import com.hmdp.ai.memory.RedisChatMemory;
+import com.hmdp.ai.memory.ltm.LongTermMemoryService;
+import com.hmdp.ai.memory.ltm.dto.MemorySearchResult;
+import com.hmdp.ai.memory.ltm.dto.SearchRequest;
 import com.hmdp.ai.skill.SkillDefinition;
 import com.hmdp.ai.skill.SkillsLoader;
 import com.hmdp.ai.tool.BlogTools;
 import com.hmdp.ai.tool.RecommendTools;
 import com.hmdp.ai.tool.ReservationTools;
 import com.hmdp.ai.tool.ShopTools;
+import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -36,6 +39,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 智能客服 Agent 核心
@@ -86,6 +90,9 @@ public class CustomerServiceAgent {
 
     @Resource(name = "redisChatMemory")
     private RedisChatMemory chatMemory;  // 改为具体类型以支持带图片的方法
+
+    @Resource
+    private LongTermMemoryService longTermMemoryService;
 
     private ReactAgent agent;
 
@@ -234,8 +241,9 @@ public class CustomerServiceAgent {
                 log.info("整合后的用户消息: {}", userMessage);
             }
 
-            // 4. 构建带历史消息的 prompt（使用整合后的消息）
-            String promptWithHistory = buildPromptWithHistory(userMessage, historyMessages);
+            // 4. 检索长期记忆并构建 prompt
+            String longTermMemoryContext = buildLongTermMemoryContext(request, sessionId, userMessage);
+            String promptWithHistory = buildPromptWithHistory(userMessage, historyMessages, longTermMemoryContext);
 
             // 5. 保存用户消息到 Redis（原始消息 + 图片信息）
             String messageToSave = buildUserMessageWithImages(request);
@@ -249,6 +257,9 @@ public class CustomerServiceAgent {
 
             thinkingBuilder.append("【推理】正在分析用户意图，匹配相关工具...\n");
             thinkingBuilder.append("【记忆】已加载 ").append(historyMessages.size()).append(" 条历史对话\n");
+            if (longTermMemoryContext != null && !longTermMemoryContext.isEmpty()) {
+                thinkingBuilder.append("【记忆】已加载长期记忆\n");
+            }
 
             AssistantMessage assistantMessage = agent.call(promptWithHistory, runnableConfig);
             String replyText = assistantMessage.getText();
@@ -470,9 +481,11 @@ public class CustomerServiceAgent {
      * 构建带历史消息的 prompt
      * 将历史对话注入到当前问题之前
      */
-    private String buildPromptWithHistory(String currentMessage, List<Message> historyMessages) {
+    private String buildPromptWithHistory(String currentMessage, List<Message> historyMessages, String longTermMemory) {
         if (historyMessages.isEmpty()) {
-            return currentMessage;
+            if (longTermMemory == null || longTermMemory.isEmpty()) {
+                return currentMessage;
+            }
         }
 
         StringBuilder promptBuilder = new StringBuilder();
@@ -487,7 +500,53 @@ public class CustomerServiceAgent {
         promptBuilder.append("# 当前问题\n\n");
         promptBuilder.append(currentMessage);
 
+        if (longTermMemory != null && !longTermMemory.isEmpty()) {
+            promptBuilder.append("\n\n# 长期记忆（供参考）\n\n");
+            promptBuilder.append(longTermMemory);
+        }
+
         return promptBuilder.toString();
+    }
+
+    private String buildLongTermMemoryContext(AgentRequest request, String sessionId, String userMessage) {
+        Long userId = UserHolder.getUserId();
+        if (userId == null) {
+            return "";
+        }
+
+        String queryText = request.getMessage();
+        if (queryText == null || queryText.isBlank()) {
+            queryText = userMessage;
+        }
+
+        SearchRequest searchRequest = new SearchRequest(
+                String.valueOf(userId),
+                sessionId,
+                queryText,
+                5,
+                Map.of("status", "active")
+        );
+
+        List<MemorySearchResult> results = longTermMemoryService.search(searchRequest);
+        if (results == null || results.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int index = 1;
+        for (MemorySearchResult result : results) {
+            sb.append(index).append(". ");
+            if (result.getText() != null) {
+                sb.append(result.getText());
+            }
+            if (result.getScore() != null) {
+                sb.append(" (score=").append(String.format("%.3f", result.getScore())).append(")");
+            }
+            sb.append("\n");
+            index++;
+        }
+
+        return sb.toString().trim();
     }
 
     /**

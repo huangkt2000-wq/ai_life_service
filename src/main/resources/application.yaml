@@ -9,7 +9,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/hmdp?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
     username: root
-    password: root
+    password: huang123
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       initial-size: 5
@@ -25,7 +25,7 @@ spring:
 
   data:
     redis:
-      host: 192.168.12.168
+      host: localhost
       port: 6379
       database: 0
       password:
@@ -47,19 +47,38 @@ spring:
     model:
       chat: openai
     openai:
-      api-key: ${OPENAI_API_KEY:}
-      base-url: https://dashscope.aliyuncs.com/compatible-mode  # base-url 必须在 openai 级别
+      api-key: sk-70207e42ee064f23a71b2cac61e32255
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1  # base-url 必须在 openai 级别
       chat:
         options:
-          model: ${OPENAI_MODEL:GLM-5}
+          model: deepseek-v4-pro
           temperature: 0.7
       # 多模态模型配置（用于图片分析）
       multimodal:
-        api-key: ${OPENAI_API_KEY:}
-        base-url: https://dashscope.aliyuncs.com/compatible-mode
+        api-key: sk-70207e42ee064f23a71b2cac61e32255
+        base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
         options:
-          model: qwen3.5-plus  # 使用支持图片输入的多模态模型
+          model: qwen3.6-plus  # 使用支持图片输入的多模态模型
           temperature: 0.7
+
+memory:
+  long-term:
+    qdrant:
+      endpoint: http://localhost:6333
+      api-key:
+      collection-name: hmdp_long_term_memories
+      vector-size: 1536
+      distance: Cosine
+    lifecycle:
+      archive-after-days: 365
+      scan-batch-size: 200
+      scan-interval-ms: 3600000
+      archive-path: /memory-archive/{user_id}/{memory_id}.json
+  embedding:
+    base-url: ${spring.ai.openai.base-url}
+    api-key: ${spring.ai.openai.api-key}
+    model: text-embedding-v2
+    batch-size: 32
 
 mybatis-plus:
   type-aliases-package: com.hmdp.entity
@@ -79,7 +98,7 @@ logging:
 
 # MinIO 配置
 minio:
-  endpoint: http://192.168.12.168:9000  # MinIO 服务地址
+  endpoint: http://localhost:9003  # MinIO 服务地址
   access-key: adminadmin           # 访问密钥
   secret-key: adminadmin           # 秘密密钥
   bucket-name: hmdp                      # 存储桶名称
